@@ -1,0 +1,23 @@
+# Forward problem (operator A) parameters
+k: 7
+kernel_type: 'motion'
+
+# Training parameters
+learning_rate: 0.0005
+n_epochs: 50
+batch_size: 8
+
+# StNN
+stnn:
+  reg_param: 0.01
+  n_iter: 3
+
+# StReNN
+strenn:
+  reg_param: 0.01
+  n_iter: 3
+
+# IS
+is:
+  reg_param: 0.31
+  k: 100

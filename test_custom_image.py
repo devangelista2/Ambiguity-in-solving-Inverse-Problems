@@ -14,9 +14,6 @@ from IPPy import stabilizers
 
 import utilities
 
-def normalize(x):
-    return (x - x.min() ) / (x.max() - x.min())
-
 
 ## ----------------------------------------------------------------------------------------------
 ## ---------- Initialization --------------------------------------------------------------------
@@ -26,7 +23,7 @@ def normalize(x):
 DATA_PATH = './custom_image_results/elephant.jpg'
 print(f"Image: {DATA_PATH}")
 
-x_true = normalize(plt.imread(DATA_PATH))
+x_true = utilities.normalize(plt.imread(DATA_PATH))
 
 m, n, c = x_true.shape
 print(f"Image shape: {x_true.shape}")
@@ -65,8 +62,8 @@ e = delta * np.random.normal(0, 1, (m, n, c))
 y_delta = y + e
 
 # Save the results
-plt.imsave(f'./custom_image_results/corr_{suffix}_{out_domain_label}{kernel_type}.jpg', normalize(y_delta), dpi=400)
-plt.imsave(f'./custom_image_results/noise_{suffix}_{out_domain_label}{kernel_type}.jpg', normalize(e), dpi=400)
+plt.imsave(f'./custom_image_results/corr_{suffix}_{out_domain_label}{kernel_type}.jpg', utilities.normalize(y_delta), dpi=400)
+plt.imsave(f'./custom_image_results/noise_{suffix}_{out_domain_label}{kernel_type}.jpg', utilities.normalize(e), dpi=400)
 
 # Change the shape of y_delta to work on it
 y_delta = np.expand_dims(np.transpose(y_delta, (2, 0, 1)), -1)
@@ -89,7 +86,7 @@ if test_nn:
     x_nn = np.transpose(x_nn, (1, 2, 0))
 
     # Save the results
-    plt.imsave(f'./custom_image_results/{weights_name}_{suffix}_{out_domain_label}{kernel_type}_recon.jpg', normalize(x_nn), dpi=400)
+    plt.imsave(f'./custom_image_results/{weights_name}_{suffix}_{out_domain_label}{kernel_type}_recon.jpg', utilities.normalize(x_nn), dpi=400)
 
 ## ----------------------------------------------------------------------------------------------
 ## ---------- Gauss Filter ----------------------------------------------------------------------
@@ -104,7 +101,7 @@ if test_gauss:
 
     # Save the results
     x_gauss_pre = np.transpose(phi(y_delta)[:, :, :, 0], (1, 2, 0))
-    plt.imsave(f'./custom_image_results/{weights_name}_{suffix}_{out_domain_label}{kernel_type}_preprocess.png', normalize(x_gauss_pre), dpi=400)
+    plt.imsave(f'./custom_image_results/{weights_name}_{suffix}_{out_domain_label}{kernel_type}_preprocess.png', utilities.normalize(x_gauss_pre), dpi=400)
 
     model = utilities.load_model_by_parameters(recon_name, model_type,
                                                suffix, kernel_type)
@@ -114,7 +111,7 @@ if test_gauss:
     x_gauss = np.transpose(x_gauss, (1, 2, 0))
 
     # Save the results
-    plt.imsave(f'./custom_image_results/{weights_name}_{suffix}_{out_domain_label}{kernel_type}_recon.jpg', normalize(x_gauss), dpi=400)
+    plt.imsave(f'./custom_image_results/{weights_name}_{suffix}_{out_domain_label}{kernel_type}_recon.jpg', utilities.normalize(x_gauss), dpi=400)
 
 ## ----------------------------------------------------------------------------------------------
 ## ---------- StNN ------------------------------------------------------------------------------
@@ -132,7 +129,7 @@ if test_stnn:
 
     # Save the results
     x_gauss_pre = np.transpose(np.array([phi(y_delta[i, :, :, 0]) for i in range(c)]), (1, 2, 0))
-    plt.imsave(f'./custom_image_results/{weights_name}_{suffix}_{out_domain_label}{kernel_type}_preprocess.png', normalize(x_gauss_pre), dpi=400)
+    plt.imsave(f'./custom_image_results/{weights_name}_{suffix}_{out_domain_label}{kernel_type}_preprocess.png', utilities.normalize(x_gauss_pre), dpi=400)
 
     model = utilities.load_model_by_parameters(recon_name, model_type,
                                                suffix, kernel_type)
@@ -142,7 +139,7 @@ if test_stnn:
     x_tik = np.transpose(x_tik, (1, 2, 0))
 
     # Save the results
-    plt.imsave(f'./custom_image_results/{weights_name}_{suffix}_{out_domain_label}{kernel_type}_recon.jpg', normalize(x_tik), dpi=400)
+    plt.imsave(f'./custom_image_results/{weights_name}_{suffix}_{out_domain_label}{kernel_type}_recon.jpg', utilities.normalize(x_tik), dpi=400)
 
 # Quanitative results
 if test_nn and test_gauss and test_stnn:

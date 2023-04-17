@@ -1,22 +1,17 @@
-# Change current directory to the correct directory
-import os
-# os.chdir('./StReNN')
-print(f"Current directory: {os.getcwd()}")
-
 # Import libraries
 import numpy as np
 
 import tensorflow as tf
 from tensorflow import keras as ks
 
-import IPPy.NN_models as NN_models
+import os
+
+import IPPy.nn.models as NN_models
 from IPPy.metrics import *
 from IPPy.utils import *
 from IPPy.operators import *
-from IPPy.NN_utils import *
-from IPPy.GCV_tik import *
+from IPPy.nn.datasets import *
 from IPPy import stabilizers
-
 
 ## ----------------------------------------------------------------------------------------------
 ## ---------- Initialization --------------------------------------------------------------------
