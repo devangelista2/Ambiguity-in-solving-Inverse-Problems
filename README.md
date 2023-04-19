@@ -15,7 +15,8 @@ Please note that the functions requires a specific folders and files structure t
 
 ```
 mkdir data
-mkdir model_weights
+mkdir gaussian_blur/model_weights
+mkdir motion_blur/model_weights
 ```
 
 Into the main project folder. For informations about how to download the data (to be placed inside the `data` folder), and the pre-trained model weights, please refer to the following.
