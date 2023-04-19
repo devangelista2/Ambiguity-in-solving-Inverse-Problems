@@ -4,6 +4,9 @@ from tensorflow import keras as ks
 from IPPy.metrics import *
 from IPPy.nn import models
 
+import numpy as np
+import matplotlib.pyplot as plt
+
 def psnr_loss(y_true, y_pred):
     """
     PSNR Loss. As in the paper: Simple Baseline for Image Restoration.
@@ -43,3 +46,21 @@ def normalize(x):
     Normalize x in [0, 1].
     """
     return (x - x.min() ) / (x.max() - x.min())
+
+def generate_error_plot(error_path, delta_min=0, delta_max=1, suffix=''):
+    errors = np.load(error_path)
+    xaxis = np.linspace(delta_min, delta_max, len(errors)) #* 256
+
+    plt.figure()
+    plt.plot(xaxis, errors[0],'o-')
+    plt.plot(xaxis, errors[1],'o-')
+    plt.plot(xaxis, errors[2],'o-')
+    plt.grid()
+    plt.legend(['NN', 'FiNN', 'StNN'])
+    plt.xlabel(r'$\delta$')
+    plt.ylabel(r'$\|\| \Psi(Kx + e) - x \|\|$')
+    plt.axis(ymin=0.05, ymax=0.30)
+    plt.tight_layout()
+    plt.title('Test case A.1')
+    plt.xticks(xaxis, rotation=30)
+    plt.savefig(f'relerrors_ssnet_{suffix}_{delta_max}_EE.png', dpi=300)

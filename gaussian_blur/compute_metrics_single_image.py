@@ -80,7 +80,6 @@ N_train, m, n = train_data.shape
 print(f"Training data shape: {train_data.shape}")
 
 # Define the setup for the forward problem
-# Define the setup for the forward problem
 k_size = setup['k']
 sigma = setup['sigma']
 kernel = get_gaussian_kernel(k_size, sigma)
@@ -116,11 +115,14 @@ else:
 
 K = ConvolutionOperator(kernel, (m, n))
 y = K @ x_true
-y_delta = y.reshape((m, n)) + (noise_level + delta) * np.random.normal(0, 1, (m, n))
+y_delta = y.reshape((m, n))
 
 # Poisson
 if peak != 0:
     y_delta = np.random.poisson(y_delta * peak) / peak
+
+# Gaussian
+y_delta = y_delta + (noise_level + delta) * np.random.normal(0, 1, (m, n))
 
 # Save the results
 plt.imsave(f'./gaussian_blur/results/corr_{suffix}_{out_domain_label}{kernel_type}.png', y_delta.reshape((m, n)), cmap='gray', dpi=400)

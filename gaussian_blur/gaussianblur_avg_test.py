@@ -13,7 +13,53 @@ from IPPy.operators import *
 from IPPy import stabilizers
 
 import utilities
+import os
 
+import argparse
+import yaml
+parser = argparse.ArgumentParser()
+parser.add_argument("-m", "--model",
+                    help="Name of the model to process. Can be used for multiple models to compare them.",
+                    required=True,
+                    action='append',
+                    choices=["nn", "finn", "stnn",]
+                    )
+parser.add_argument('-n', '--model_type',
+                    choices=['unet', 'ssnet', 'nafnet'],
+                    help='Select the architecture you want to test. Default: unet.',
+                    type=str,
+                    default='unet',
+                    required=False)
+parser.add_argument('-ni', '--noise_inj',
+                    help="The amount of noise injection. Given as the variance of the Gaussian. Default: 0.",
+                    type=float,
+                    default=0,
+                    required=False)
+parser.add_argument("-d", "--delta",
+                    help="Noise level of additional corruption. Given as gaussian variance. Default: 0.",
+                    type=float,
+                    required=False,
+                    default=0
+                    )
+parser.add_argument("-po", "--poisson",
+                    help="Poisson noise level of additional corruption. Given as the Poisson peak. Default: 0.",
+                    type=float,
+                    required=False,
+                    default=0
+                    )
+parser.add_argument('--config',
+                    help="The path for the .yml containing the configuration for the model.",
+                    type=str,
+                    required=False,
+                    default=None)
+args = parser.parse_args()
+
+if args.config is None:
+    suffix = str(args.noise_inj).split('.')[-1]
+    args.config = f"./config/GoPro_{suffix}_gaussian.yml"
+
+with open(args.config, 'r') as file:
+    setup = yaml.safe_load(file)
 
 ## ----------------------------------------------------------------------------------------------
 ## ---------- Initialization --------------------------------------------------------------------
@@ -30,34 +76,28 @@ N_train, m, n = train_data.shape
 print(f"Training data shape: {train_data.shape}")
 
 # Define the setup for the forward problem
-k_size = 11
-sigma = 1.3
+k_size = setup['k']
+sigma = setup['sigma']
+kernel = get_gaussian_kernel(k_size, sigma)
 
 kernel_type = 'gaussian'
-if kernel_type == 'gaussian':
-    kernel = get_gaussian_kernel(k_size, sigma)
-elif kernel_type == 'motion':
-    kernel = get_motion_blur_kernel(k_size) 
 
-model_type = 'unet' # choose unet, ssnet, baseline, nafnet
+noise_level = args.noise_inj
+suffix = str(noise_level).split('.')[-1]
 
-noise_level = 0.025
-delta = 0.050 # Out-of-domain noise intensity
-peak = 0 # Peak in Poisson Noise
+print(f"Suffix: {suffix}")
 
-if noise_level == 0:
-    suffix = '0'
-elif noise_level == 0.025:
-    suffix = '025'
+delta = args.delta # Out-of-domain noise intensity
+delta_suffix = str(delta).split('.')[-1]
+
+peak = args.poisson # Peak in Poisson Noise
 
 if delta != 0:
-    out_domain_label = "g_noise_"
+    out_domain_label = f"g_noise{delta_suffix}_"
 elif delta == 0 and peak != 0:
     out_domain_label = "poisson_noise_"
 else:
     out_domain_label = ""
-
-print(f"Suffix: {suffix}")
 
 # Corrupt
 K = ConvolutionOperator(kernel, (m, n))
@@ -75,79 +115,55 @@ for i in range(len(test_data)):
     # Add to data
     corr_data[i] = y_delta
 
-## ----------------------------------------------------------------------------------------------
-## ---------- NN --------------------------------------------------------------------------------
-## ----------------------------------------------------------------------------------------------
-test_nn = True
-if test_nn:
-    recon_name = 'nn'
-    weights_name = f'{recon_name}_{model_type}'
-    phi = stabilizers.PhiIdentity()
+PSNR_errors = np.zeros((len(test_data), len(args.model+1)))
+SSIM_errors = np.zeros((len(test_data), len(args.model+1)))
+for i, recon_name in enumerate(args.model):
+    ## ----------------------------------------------------------------------------------------------
+    ## ---------- NN --------------------------------------------------------------------------------
+    ## ----------------------------------------------------------------------------------------------
+    if recon_name == 'nn':
+        weights_name = f'{recon_name}_{args.model_type}'
+        phi = stabilizers.PhiIdentity()
 
-    model = utilities.load_model_by_parameters(recon_name, model_type,
+    ## ----------------------------------------------------------------------------------------------
+    ## ---------- Gauss Filter ----------------------------------------------------------------------
+    ## ----------------------------------------------------------------------------------------------
+    if recon_name == 'finn':
+        # Reconstruct with FiNN
+        weights_name = f'{recon_name}_{args.model_type}'
+        sigma = setup[recon_name]['sigma']
+        phi = stabilizers.GaussianFilter(sigma)
+
+    ## ----------------------------------------------------------------------------------------------
+    ## ---------- StNN ------------------------------------------------------------------------------
+    ## ----------------------------------------------------------------------------------------------
+    if recon_name == 'stnn':
+        # Reconstruct with StNN
+        weights_name = f'{recon_name}_{args.model_type}'
+        reg_param = setup[recon_name]['reg_param']
+        phi = stabilizers.Tik_CGLS_stabilizer(kernel, reg_param, k=setup[recon_name]['n_iter'])
+
+    model = utilities.load_model_by_parameters(recon_name, args.model_type,
                                                suffix, kernel_type)
     Psi = reconstructors.StabilizedReconstructor(model, phi)
 
-    nn_data = Psi(corr_data)
-    print(nn_data.shape)
+    rec_data = Psi(corr_data)
 
-## ----------------------------------------------------------------------------------------------
-## ---------- Gauss Filter ----------------------------------------------------------------------
-## ----------------------------------------------------------------------------------------------
-test_gauss = True
-if test_gauss:
-    # Reconstruct with FiNN
-    recon_name = 'gauss'
-    weights_name = f'{recon_name}_{model_type}'
-    sigma = 1
+    for j in range(len(test_data)):
+        PSNR_errors[j+1, i] = PSNR(test_data[j], rec_data[j])
+        SSIM_errors[j+1, i] = SSIM(test_data[j], rec_data[j]).numpy()
+for j in range(len(test_data)):
+        PSNR_errors[j+1, 0] = PSNR(test_data[j], corr_data[j])
+        SSIM_errors[j+1, 0] = SSIM(test_data[j], corr_data[j]).numpy()
 
-    phi = stabilizers.GaussianFilter(sigma)
-    model = utilities.load_model_by_parameters(recon_name, model_type,
-                                               suffix, kernel_type)
-    Psi = reconstructors.StabilizedReconstructor(model, phi)
-
-    gauss_data = Psi(corr_data)
-
-## ----------------------------------------------------------------------------------------------
-## ---------- StNN ------------------------------------------------------------------------------
-## ----------------------------------------------------------------------------------------------
-test_stnn = True
-if test_stnn:
-    # Reconstruct with StNN
-    recon_name = 'tik'
-    weights_name = f'{recon_name}_{model_type}'
-    if noise_level == 0:
-        reg_param = 1e-2
-    elif noise_level == 0.025:
-        reg_param = 1e-3
-    phi = stabilizers.Tik_CGLS_stabilizer(kernel, reg_param, k=2)
-
-    model = utilities.load_model_by_parameters(recon_name, model_type,
-                                               suffix, kernel_type)
-    Psi = reconstructors.StabilizedReconstructor(model, phi)
-
-    tik_data = Psi(corr_data)
-
-# Compute the avg and std of the errors, in PSNR and SSIM.
-PSNR_errors = np.zeros((len(test_data), 4))
-SSIM_errors = np.zeros((len(test_data), 4))
-for i in range(len(test_data)):
-    PSNR_errors[i, 0] = PSNR(test_data[i], corr_data[i])
-    PSNR_errors[i, 1] = PSNR(test_data[i], nn_data[i])
-    PSNR_errors[i, 2] = PSNR(test_data[i], gauss_data[i])
-    PSNR_errors[i, 3] = PSNR(test_data[i], tik_data[i])
-
-    SSIM_errors[i, 0] = SSIM(test_data[i], corr_data[i]).numpy()
-    SSIM_errors[i, 1] = SSIM(test_data[i], nn_data[i]).numpy()
-    SSIM_errors[i, 2] = SSIM(test_data[i], gauss_data[i]).numpy()
-    SSIM_errors[i, 3] = SSIM(test_data[i], tik_data[i]).numpy()
-
+# Compute statistics
 PSNR_means = np.mean(PSNR_errors, axis=0)
 PSNR_stds = np.std(PSNR_errors, axis=0)
 
 SSIM_means = np.mean(SSIM_errors, axis=0)
 SSIM_stds = np.std(SSIM_errors, axis=0)
 
+############################## TO DO!!
 # Print out the results
 import tabulate
 data = [["", "PSNR", "SSIM"],
