@@ -1,6 +1,4 @@
-data/
-**/model_weigths/
+data/*
 **/__pycache__/
 __pycache__/
-gaussian_blur/model_weights/
-
+gaussian_blur/model_weights/*
