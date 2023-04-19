@@ -150,11 +150,11 @@ for i, recon_name in enumerate(args.model):
     rec_data = Psi(corr_data)
 
     for j in range(len(test_data)):
-        PSNR_errors[j+1, i] = PSNR(test_data[j], rec_data[j])
-        SSIM_errors[j+1, i] = SSIM(test_data[j], rec_data[j]).numpy()
+        PSNR_errors[j, i+1] = PSNR(test_data[j], rec_data[j])
+        SSIM_errors[j, i+1] = SSIM(test_data[j], rec_data[j]).numpy()
 for j in range(len(test_data)):
-        PSNR_errors[j+1, 0] = PSNR(test_data[j], corr_data[j])
-        SSIM_errors[j+1, 0] = SSIM(test_data[j], corr_data[j]).numpy()
+        PSNR_errors[j, 0] = PSNR(test_data[j], corr_data[j])
+        SSIM_errors[j, 0] = SSIM(test_data[j], corr_data[j]).numpy()
 
 # Compute statistics
 PSNR_means = np.mean(PSNR_errors, axis=0)
@@ -166,14 +166,13 @@ SSIM_stds = np.std(SSIM_errors, axis=0)
 ############################## TO DO!!
 # Print out the results
 import tabulate
-data = [["", "PSNR", "SSIM"],
-        ["Start", str(PSNR_means[0])[:5] + u" \u00B1 " + str(PSNR_stds[0])[:5], str(SSIM_means[0])[:6] + u" \u00B1 " + str(SSIM_stds[0])[:6]],
-        ["NN", str(PSNR_means[1])[:5] + u" \u00B1 " + str(PSNR_stds[1])[:5], str(SSIM_means[1])[:6] + u" \u00B1 " + str(SSIM_stds[1])[:6]],
-        ["Gauss", str(PSNR_means[2])[:5] + u" \u00B1 " + str(PSNR_stds[2])[:5], str(SSIM_means[2])[:6] + u" \u00B1 " + str(SSIM_stds[2])[:6]],
-        ["Tik", str(PSNR_means[3])[:5] + u" \u00B1 " + str(PSNR_stds[3])[:5], str(SSIM_means[3])[:6] + u" \u00B1 " + str(SSIM_stds[3])[:6]]]
+data = [["", "Start"] + args.model,
+        ["PSNR"] + [str(PSNR_means[i])[:5] + u" \u00B1 " + str(PSNR_stds[i])[:5] for i in range(len(args.model)+1)],
+        ["SSIM"] + [str(SSIM_means[i])[:5] + u" \u00B1 " + str(SSIM_stds[i])[:5] for i in range(len(args.model)+1)]
+        ]
 print(tabulate.tabulate(data))
 
 # Save the errors
-np.save(f'./results/PSNR_{model_type}_{suffix}_{out_domain_label}{kernel_type}.npy', PSNR_errors)
-np.save(f'./results/SSIM_{model_type}_{suffix}_{out_domain_label}{kernel_type}.npy', SSIM_errors)
+np.save(f'./results/PSNR_{args.model_type}_{suffix}_{out_domain_label}{kernel_type}.npy', PSNR_errors)
+np.save(f'./results/SSIM_{args.model_type}_{suffix}_{out_domain_label}{kernel_type}.npy', SSIM_errors)
 

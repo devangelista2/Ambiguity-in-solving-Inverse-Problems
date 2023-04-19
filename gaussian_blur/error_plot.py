@@ -2,6 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from skimage import data
 
+import utilities
+
 from tensorflow import keras as ks
 
 import IPPy.nn.models as NN_models
@@ -11,6 +13,59 @@ from IPPy.utils import *
 from IPPy.operators import *
 from IPPy.nn.datasets import *
 from IPPy import stabilizers
+
+import os
+import argparse
+import yaml
+parser = argparse.ArgumentParser()
+parser.add_argument("-m", "--model",
+                    help="Name of the model to process. Can be used for multiple models to compare them.",
+                    required=True,
+                    action='append',
+                    choices=["nn", "finn", "stnn",]
+                    )
+parser.add_argument('-n', '--model_type',
+                    choices=['unet', 'ssnet', 'nafnet'],
+                    help='Select the architecture you want to test. Default: unet.',
+                    type=str,
+                    default='unet',
+                    required=False)
+parser.add_argument('-ni', '--noise_inj',
+                    help="The amount of noise injection. Given as the variance of the Gaussian. Default: 0.",
+                    type=float,
+                    default=0,
+                    required=False)
+parser.add_argument("-dm", "--delta_min",
+                    help="Minimum noise level of additional corruption. Given as gaussian variance. Default: 0.01.",
+                    type=float,
+                    required=False,
+                    default=0.01
+                    )
+parser.add_argument("-dM", "--delta_max",
+                    help="Maximum noise level of additional corruption. Given as gaussian variance. Default: 0.1.",
+                    type=float,
+                    required=False,
+                    default=0.1
+                    )
+parser.add_argument("-dn", "--delta_n",
+                    help="Number of noise level of additional corruption. Default: 10.",
+                    type=int,
+                    required=False,
+                    default=10
+                    )
+parser.add_argument('--config',
+                    help="The path for the .yml containing the configuration for the model.",
+                    type=str,
+                    required=False,
+                    default=None)
+args = parser.parse_args()
+
+if args.config is None:
+    suffix = str(args.noise_inj).split('.')[-1]
+    args.config = f"./config/GoPro_{suffix}_gaussian.yml"
+
+with open(args.config, 'r') as file:
+    setup = yaml.safe_load(file)
 
 
 ## ----------------------------------------------------------------------------------------------
@@ -28,83 +83,60 @@ N_train, m, n = train_data.shape
 print(f"Training data shape: {train_data.shape}")
 
 # Define the setup for the forward problem
-k_size = 11
-sigma = 1.3
+k_size = setup['k']
+sigma = setup['sigma']
+kernel = get_gaussian_kernel(k_size, sigma)
 
 kernel_type = 'gaussian'
-if kernel_type == 'gaussian':
-    kernel = get_gaussian_kernel(k_size, sigma)
-elif kernel_type == 'motion':
-    kernel = get_motion_blur_kernel(k_size) 
 
-noise_level = 0.0
-delta = 0.030 # Out-of-domain noise intensity
-
-if noise_level == 0:
-    suffix = '0'
-elif noise_level == 0.025:
-    suffix = '025'
-
-if delta != 0:
-    out_domain_label = "g_noise_"
-else:
-    out_domain_label = ""
+noise_level = args.noise_inj
+suffix = str(noise_level).split('.')[-1]
 
 print(f"Suffix: {suffix}")
 
 # Corrupt
-x_true = train_data[700]
+x_true = test_data[0]
 K = ConvolutionOperator(kernel, (m, n))
 y = K @ x_true
 y = y.reshape((m, n))
 
-errors = np.zeros((3, 11))
-for i, d in enumerate(np.linspace(0, delta, 11)):
-    y_delta = y + d * np.random.normal(0, 1, y.shape)
+errors = np.zeros((3, args.delta_n))
+for j, recon_name in enumerate(args.model):
+    for i, d in enumerate(np.linspace(args.delta_min, args.delta_max, args.delta_n)):
+        y_delta = y + d * np.random.normal(0, 1, y.shape)
 
-    ## ----------------------------------------------------------------------------------------------
-    ## ---------- NN --------------------------------------------------------------------------------
-    ## ----------------------------------------------------------------------------------------------
-    weights_name = 'nn_ssnet'
-    phi = stabilizers.PhiIdentity()
+        ## ----------------------------------------------------------------------------------------------
+        ## ---------- NN --------------------------------------------------------------------------------
+        ## ----------------------------------------------------------------------------------------------
+        if recon_name == 'nn':
+            weights_name = f'{recon_name}_{args.model_type}'
+            phi = stabilizers.PhiIdentity()
 
-    model = ks.models.load_model(f"./model_weights/{weights_name}_{suffix}_{kernel_type}.h5", custom_objects={'SSIM': SSIM})
-    Psi = reconstructors.StabilizedReconstructor(model, phi)
+        ## ----------------------------------------------------------------------------------------------
+        ## ---------- Gauss Filter ----------------------------------------------------------------------
+        ## ----------------------------------------------------------------------------------------------
+        if recon_name == 'finn':
+            # Reconstruct with FiNN
+            weights_name = f'{recon_name}_{args.model_type}'
+            sigma = setup[recon_name]['sigma']
+            phi = stabilizers.GaussianFilter(sigma)
 
-    x_nn = Psi(y_delta)
+        ## ----------------------------------------------------------------------------------------------
+        ## ---------- StNN ------------------------------------------------------------------------------
+        ## ----------------------------------------------------------------------------------------------
+        if recon_name == 'stnn':
+            # Reconstruct with StNN
+            weights_name = f'{recon_name}_{args.model_type}'
+            reg_param = setup[recon_name]['reg_param']
+            phi = stabilizers.Tik_CGLS_stabilizer(kernel, reg_param, k=setup[recon_name]['n_iter'])
 
-    ## ----------------------------------------------------------------------------------------------
-    ## ---------- Gauss Filter ----------------------------------------------------------------------
-    ## ----------------------------------------------------------------------------------------------
-    # Reconstruct with StNN
-    weights_name = 'gauss_ssnet'
-    sigma = 1
-    phi = stabilizers.GaussianFilter(sigma)
+        model = utilities.load_model_by_parameters(recon_name, args.model_type,
+                                                suffix, kernel_type)
+        Psi = reconstructors.StabilizedReconstructor(model, phi)
 
-    model = ks.models.load_model(f"./model_weights/{weights_name}_{suffix}_{kernel_type}.h5", custom_objects={'SSIM': SSIM})
-    Psi = reconstructors.StabilizedReconstructor(model, phi)
+        x_rec = Psi(y_delta)
 
-    x_gauss = Psi(y_delta)
-
-    ## ----------------------------------------------------------------------------------------------
-    ## ---------- StNN ------------------------------------------------------------------------------
-    ## ----------------------------------------------------------------------------------------------
-    # Reconstruct with StNN
-    weights_name = 'tik_ssnet'
-    if noise_level == 0:
-        reg_param = 1e-2
-    elif noise_level == 0.025:
-        reg_param = 1e-2
-    phi = stabilizers.Tik_CGLS_stabilizer(kernel, reg_param, k=3)
-
-    model = ks.models.load_model(f"./model_weights/{weights_name}_{suffix}_{kernel_type}.h5", custom_objects={'SSIM': SSIM})
-    Psi = reconstructors.StabilizedReconstructor(model, phi)
-
-    x_tik = Psi(y_delta)
-
-    # Append errors
-    errors[0, i] = np.linalg.norm(x_nn.flatten() - x_true.flatten())/np.linalg.norm(x_true.flatten())
-    errors[1, i] = np.linalg.norm(x_gauss.flatten() - x_true.flatten())/np.linalg.norm(x_true.flatten())
-    errors[2, i] = np.linalg.norm(x_tik.flatten() - x_true.flatten())/np.linalg.norm(x_true.flatten())
-    print(f"Iteration {i+1}.")
-np.save(f'relerrors_ssnet_{suffix}_{delta}.npy', errors)
+        # Append errors
+        errors[j, i] = np.linalg.norm(x_rec.flatten() - x_true.flatten()) / np.linalg.norm(x_true.flatten())
+        print(f"Iteration {i+1}.")
+np.save(f'relerrors_ssnet_{suffix}_{args.delta_max}.npy', errors)
