@@ -19,11 +19,12 @@ import argparse
 import yaml
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-m', '--model_name',
-                    choices=["nn", "finn", "stnn"],
-                    help="Select the model you want to test.",
-                    type=str,
-                    required=True)
+parser.add_argument("-m", "--model",
+                    help="Name of the model to process. Can be used for multiple models to compare them.",
+                    required=True,
+                    action='append',
+                    choices=["nn", "finn", "stnn",]
+                    )
 parser.add_argument('-n', '--model_type',
                     choices=['unet', 'ssnet', 'nafnet'],
                     help='Select the architecture you want to test. Default: unet.',
@@ -59,7 +60,7 @@ with open(args.config, 'r') as file:
 ## ---------- Initialization --------------------------------------------------------------------
 ## ----------------------------------------------------------------------------------------------
 # Load data
-DATA_PATH = './data/'
+DATA_PATH = 'C:/Users/tivog/data/gopro_small'
 TRAIN_PATH = os.path.join(DATA_PATH, 'GOPRO_train_small.npy')
 
 train_data = np.load(TRAIN_PATH)
@@ -82,42 +83,49 @@ print(f"Suffix: {suffix}")
 n_epochs = setup['n_epochs']
 batch_size = setup['batch_size']
 
-## ----------------------------------------------------------------------------------------------
-## ---------- NN --------------------------------------------------------------------------------
-## ----------------------------------------------------------------------------------------------
-if args.model_type == 'nn':
-    # Define dataloader
-    trainloader = Data2D(TRAIN_PATH, kernel, noise_level=noise_level, batch_size=batch_size)
+for recon in args.model:
+    ## ----------------------------------------------------------------------------------------------
+    ## ---------- NN --------------------------------------------------------------------------------
+    ## ----------------------------------------------------------------------------------------------
+    if recon == 'nn':
+        # Define dataloader
+        trainloader = Data2D(TRAIN_PATH, kernel, noise_level=noise_level, batch_size=batch_size)
 
-## ----------------------------------------------------------------------------------------------
-## ---------- FiNN ------------------------------------------------------------------------------
-## ----------------------------------------------------------------------------------------------
-if args.model_type == 'finn':
-    # Define dataloader
-    sigma = setup[args.model_name]['sigma']
-    phi = stabilizers.GaussianFilter(sigma)
-    trainloader = Data2D(TRAIN_PATH, kernel, noise_level=noise_level, batch_size=batch_size, phi=phi)
+    ## ----------------------------------------------------------------------------------------------
+    ## ---------- FiNN ------------------------------------------------------------------------------
+    ## ----------------------------------------------------------------------------------------------
+    if recon == 'finn':
+        # Define dataloader
+        sigma = setup[recon]['sigma']
+        phi = stabilizers.GaussianFilter(sigma)
+        trainloader = Data2D(TRAIN_PATH, kernel, noise_level=noise_level, batch_size=batch_size, phi=phi)
 
-## ----------------------------------------------------------------------------------------------
-## ---------- StNN ------------------------------------------------------------------------------
-## ----------------------------------------------------------------------------------------------
-if args.model_type == 'stnn':
-    # Define dataloader
-    reg_param = setup[args.model_name]['reg_param']
-    phi = stabilizers.Tik_CGLS_stabilizer(kernel, reg_param, k=setup[args.model_name]['n_iter'])
-    trainloader = Data2D(TRAIN_PATH, kernel, noise_level=noise_level, batch_size=batch_size, phi=phi)
+    ## ----------------------------------------------------------------------------------------------
+    ## ---------- StNN ------------------------------------------------------------------------------
+    ## ----------------------------------------------------------------------------------------------
+    if recon == 'stnn':
+        # Define dataloader
+        reg_param = setup[recon]['reg_param']
+        phi = stabilizers.Tik_CGLS_stabilizer(kernel, reg_param, k=setup[recon]['n_iter'])
+        trainloader = Data2D(TRAIN_PATH, kernel, noise_level=noise_level, batch_size=batch_size, phi=phi)
 
-# Build model and compile it
-model = utilities.build_model(args.model_type)
+    # Build model and compile it
+    model = utilities.build_model(args.model_type)
 
-# Define the Optimizer
-learning_rate = setup['learning_rate']
+    # Define the Optimizer
+    learning_rate = setup['learning_rate']
 
-model.compile(optimizer=ks.optimizers.Adam(learning_rate=learning_rate),
-            loss='mse',
-            metrics=[SSIM, 'mse'])
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3,
+                                                     beta_1=0.9,
+                                                     beta_2=0.9),
+                  loss=utilities.psnr_loss,
+                  metrics=[SSIM, 'mse'])
 
-# Train
-model.fit(trainloader, epochs=n_epochs)
-model.save(f"./gaussian_blur/model_weights/{args.model_name}_{args.model_type}_{suffix}_{kernel_type}.h5")
-print(f"Training of {args.model_name} model -> Finished.")
+    #model.compile(optimizer=ks.optimizers.Adam(learning_rate=learning_rate),
+    #            loss='mse',
+    #            metrics=[SSIM, 'mse'])
+
+    # Train
+    model.fit(trainloader, epochs=n_epochs)
+    model.save(f"./gaussian_blur/model_weights/{recon}_{args.model_type}_{suffix}_{kernel_type}.h5")
+    print(f"Training of {recon} model -> Finished.")

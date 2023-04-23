@@ -120,8 +120,9 @@ for i in range(len(test_data)):
     blur_data[i] = y.reshape((m, n))
     corr_data[i] = y_delta
 
-clean_err = []
-corr_err = []
+clean_err = np.zeros((len(test_data), ))
+corr_err = np.zeros((len(test_data), ))
+norm_e = np.zeros((len(test_data), ))
 for recon_name in args.model:
     ## ----------------------------------------------------------------------------------------------
     ## ---------- NN --------------------------------------------------------------------------------
@@ -156,33 +157,23 @@ for recon_name in args.model:
     x_corr_rec = Psi(corr_data)
 
     # Quanitative results
-    err = 0
-    corr_e = 0
-    for i in range(len(test_data)):
-        err += np.linalg.norm(x_true.flatten() - x_rec[i].flatten())
-        corr_err += np.linalg.norm(x_true.flatten() - x_corr_rec[i].flatten())
-    # Normalize
-    err = err / len(test_data)
-    corr_e = corr_e / len(test_data)
+    clean_err = np.linalg.norm(test_data.reshape((len(test_data), -1)) - x_rec.reshape((len(test_data), -1)), axis=-1)
+    corr_err = np.linalg.norm(test_data.reshape((len(test_data), -1)) - x_corr_rec.reshape((len(test_data), -1)), axis=-1)
+    norm_e = np.linalg.norm(corr_data.reshape((len(test_data), -1)) - blur_data.reshape((len(test_data), -1)), axis=-1)
 
-    # Compute the accuracy
-    clean_err.append(err)
-    corr_err.append(corr_e)
-# Convert to numpy arrays
-clean_err = np.array(clean_err)
-corr_err = np.array(corr_err)
+    # Save the results
+    np.save(f'./gaussian_blur/results/clean_err_{recon_name}_{args.model_type}_{suffix}_{delta_suffix}_gaussian.npy', clean_err)
+    np.save(f'./gaussian_blur/results/corr_err_{recon_name}_{args.model_type}_{suffix}_{delta_suffix}_gaussian.npy', corr_err)
+    np.save(f'./gaussian_blur/results/norm_e_{recon_name}_{args.model_type}_{suffix}_{delta_suffix}_gaussian.npy', norm_e)
 
-# Compute the stability
-e = y_delta - y
-e_norm = np.linalg.norm(e.flatten())
+    # Compute the accuracy^{-1}
+    inv_acc = np.max(clean_err)
 
-# Print ressults
-import tabulate
-data = [[""] + args.model,
-        ["Acc"] + list(1/clean_err),
-        ["C"] + list((corr_err - clean_err) / e_norm),
-        ["Err"] + list(clean_err),
-        ["Corr_Err"] + list(corr_err)]
+    # Compute the "local stability constant" for each datapoint
+    C_local = (corr_err - inv_acc) / norm_e
 
-print(f"||e|| = {e_norm}.")
-print(tabulate.tabulate(data))
+    # Compute the Global stability constant
+    C = np.max(C_local)
+
+    # Print out the result
+    print(f"Delta: {delta}. Network: {args.model_type}. Reconstructor: {recon_name}. Acc: {1 / inv_acc}. C: {C}.")
