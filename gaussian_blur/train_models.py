@@ -115,7 +115,7 @@ for recon in args.model:
     # Define the Optimizer
     learning_rate = setup['learning_rate']
 
-    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3,
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate,
                                                      beta_1=0.9,
                                                      beta_2=0.9),
                   loss=utilities.psnr_loss,
