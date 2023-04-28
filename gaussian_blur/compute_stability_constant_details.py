@@ -114,7 +114,9 @@ for i in range(len(test_data)):
         y_delta = np.random.poisson(y_delta * peak) / peak
 
     # Gauss
-    y_delta = y_delta + (noise_level + delta) * np.random.normal(0, 1, (m, n))
+    e_norm = np.random.random() * (noise_level + delta) * np.sqrt(m*n)
+    e = np.random.normal(0, 1, (m, n))
+    y_delta = y_delta + e / np.linalg.norm(e.flatten()) * e_norm
 
     # Add to data
     blur_data[i] = y.reshape((m, n))

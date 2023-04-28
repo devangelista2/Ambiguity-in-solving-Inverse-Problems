@@ -115,8 +115,8 @@ for i in range(len(test_data)):
     # Add to data
     corr_data[i] = y_delta
 
-PSNR_errors = np.zeros((len(test_data), len(args.model+1)))
-SSIM_errors = np.zeros((len(test_data), len(args.model+1)))
+PSNR_errors = np.zeros((len(test_data), len(args.model)+1))
+SSIM_errors = np.zeros((len(test_data), len(args.model)+1))
 for i, recon_name in enumerate(args.model):
     ## ----------------------------------------------------------------------------------------------
     ## ---------- NN --------------------------------------------------------------------------------
@@ -173,6 +173,6 @@ data = [["", "Start"] + args.model,
 print(tabulate.tabulate(data))
 
 # Save the errors
-np.save(f'./results/PSNR_{args.model_type}_{suffix}_{out_domain_label}{kernel_type}.npy', PSNR_errors)
-np.save(f'./results/SSIM_{args.model_type}_{suffix}_{out_domain_label}{kernel_type}.npy', SSIM_errors)
+np.save(f'./gaussian_blur/results/PSNR_{args.model_type}_{suffix}_{out_domain_label}{kernel_type}.npy', PSNR_errors)
+np.save(f'./gaussian_blur/results/SSIM_{args.model_type}_{suffix}_{out_domain_label}{kernel_type}.npy', SSIM_errors)
 

@@ -64,3 +64,132 @@ def generate_error_plot(error_path, delta_min=0, delta_max=1, suffix=''):
     plt.title('Test case A.1')
     plt.xticks(xaxis, rotation=30)
     plt.savefig(f'relerrors_ssnet_{suffix}_{delta_max}_EE.png', dpi=300)
+
+def corr_error_over_noise_amplitude(model, model_type, noise_level, delta):
+    """
+    The idea is to make a (scatter) plot with ||e|| in abscissae, || Psi(Ax+e) - x || - eta on y-axis. 
+    As a result, the points below the y=x line are "stable", while points above the y=x line are unstable.
+    """
+    # Compute the maximum x-lim
+    Mx = (delta + noise_level) * 256
+
+    # Load data in memory
+    suffix = str(noise_level).split('.')[-1]
+    delta_suffix = str(delta).split('.')[-1]
+
+    clean_err = np.load(f"./gaussian_blur/results/clean_err_{model}_{model_type}_{suffix}_{delta_suffix}_gaussian.npy")
+    corr_err = np.load(f"./gaussian_blur/results/corr_err_{model}_{model_type}_{suffix}_{delta_suffix}_gaussian.npy")
+    norm_e = np.load(f"./gaussian_blur/results/norm_e_{model}_{model_type}_{suffix}_{delta_suffix}_gaussian.npy")
+
+    # Compute the accuracy
+    inv_acc = np.max(clean_err)
+    
+    # Get the color
+    c = ['r' if (corr_err[i]- inv_acc)>norm_e[i] else 'green' for i in range(len(corr_err))]
+
+    plt.figure()
+    plt.scatter(norm_e, corr_err - inv_acc, s=5, c=c)
+    plt.plot((0, Mx), (0, Mx), 'b--')
+
+    plt.xlim((0, Mx))
+    # plt.ylim((0, 3*Mx))
+    plt.xlabel(r"$|| e_i ||$")
+    plt.ylabel(r"$|| \Psi(Ax_i + e_i) - x_i || - \eta$")
+
+    plt.grid()
+    plt.tight_layout()
+    plt.savefig(f"./gaussian_blur/results/corr_error_over_noise_amplitude_{model}_{model_type}_{suffix}_{delta_suffix}_gaussian.png", dpi=300)
+    plt.close()
+
+def plot_local_stability_constant_test_set(model, model_type, noise_level, delta):
+    """
+    The idea is to make a (scatter) plot with i = 1, ..., N in abscissae, the local stability constant on y-axis.
+    """
+    # Load data in memory
+    suffix = str(noise_level).split('.')[-1]
+    delta_suffix = str(delta).split('.')[-1]
+
+    clean_err = np.load(f"./gaussian_blur/results/clean_err_{model}_{model_type}_{suffix}_{delta_suffix}_gaussian.npy")
+    corr_err = np.load(f"./gaussian_blur/results/corr_err_{model}_{model_type}_{suffix}_{delta_suffix}_gaussian.npy")
+    norm_e = np.load(f"./gaussian_blur/results/norm_e_{model}_{model_type}_{suffix}_{delta_suffix}_gaussian.npy")
+
+    # Compute the accuracy
+    inv_acc = np.max(clean_err)
+
+    # Compute the local stability constant
+    C = (corr_err - inv_acc) / norm_e
+    
+    # Get the color
+    c = ['r' if C[i]>1 else 'green' for i in range(len(corr_err))]
+
+    plt.figure()
+    plt.scatter(np.arange(len(corr_err)), C, s=5, c=c)
+    plt.plot((0, len(corr_err)-1), (1, 1), 'b--')
+
+    plt.ylim((-3, 3))
+    plt.xlabel("i")
+    plt.ylabel(r"$C^\delta_\Psi(i)$")
+
+    plt.grid()
+    plt.tight_layout()
+    plt.savefig(f"./gaussian_blur/results/local_stability_constant_{model}_{model_type}_{suffix}_{delta_suffix}_gaussian.png", dpi=300)
+    plt.close()
+
+def visualize_boxplot(model_type, noise_level, delta, loss):
+    """
+    Generate boxplots as in the experiment.
+    """
+    # Load data in memory
+    suffix = str(noise_level).split('.')[-1]
+    delta_suffix = '_g_noise'+str(delta).split('.')[-1] if delta != 0 else ''
+     
+    loss_vec = np.load(f"./gaussian_blur/results/{loss}_{model_type}_{suffix}{delta_suffix}_gaussian.npy")
+
+    # Remove y_delta
+    loss_vec = loss_vec[:, 1:]
+
+    # Reflect
+    loss_vec = loss_vec[:, ::-1]
+
+    # Draw boxplot
+    ax = plt.axes()
+    bplot = plt.boxplot(loss_vec, vert=False, patch_artist=True, notch=True)
+    plt.yticks([1, 2, 3], ['StNN', 'FiNN', 'NN'])
+    
+    plt.xlim((0.5, 1))
+    plt.xlabel(loss)
+
+    # fill with colors
+    colors = ['lightblue', 'orange', 'lightgreen'][::-1]
+    for patch, color in zip(bplot['boxes'], colors):
+        patch.set_facecolor(color)
+
+    # adding horizontal grid lines
+    ax.xaxis.grid(True)
+
+    plt.tight_layout()
+    plt.savefig(f"./gaussian_blur/results/boxplot_{loss}_{model_type}_{suffix}{delta_suffix}_gaussian.png", dpi=400)
+    plt.close()
+
+
+corr_error_over_noise_amplitude('nn', 'nafnet', 0, 0.01)
+corr_error_over_noise_amplitude('finn', 'nafnet', 0, 0.01)
+corr_error_over_noise_amplitude('stnn', 'nafnet', 0, 0.01)
+
+plot_local_stability_constant_test_set('nn', 'nafnet', 0, 0.01)
+plot_local_stability_constant_test_set('finn', 'nafnet', 0, 0.01)
+plot_local_stability_constant_test_set('stnn', 'nafnet', 0, 0.01)
+
+visualize_boxplot('nafnet', 0, 0, 'SSIM')
+visualize_boxplot('nafnet', 0, 0.01, 'SSIM')
+
+corr_error_over_noise_amplitude('nn', 'nafnet', 0.025, 0.05)
+corr_error_over_noise_amplitude('finn', 'nafnet', 0.025, 0.05)
+corr_error_over_noise_amplitude('stnn', 'nafnet', 0.025, 0.05)
+
+plot_local_stability_constant_test_set('nn', 'nafnet', 0.025, 0.05)
+plot_local_stability_constant_test_set('finn', 'nafnet', 0.025, 0.05)
+plot_local_stability_constant_test_set('stnn', 'nafnet', 0.025, 0.05)
+
+visualize_boxplot('nafnet', 0.025, 0, 'SSIM')
+visualize_boxplot('nafnet', 0.025, 0.05, 'SSIM')
