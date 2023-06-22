@@ -1,5 +1,18 @@
 # Ambiguity-in-solving-Inverse-Problems
-GitHub repository to reproduce experiments from the paper: ...
+GitHub repository to reproduce experiments from the paper: *Ambiguity in solving imaging inverse problems with deep
+learning based operators*. Pre-print available on arXiv.org at: https://arxiv.org/abs/2305.19774.
+
+## Cite us
+Feel free to cite us:
+
+```
+@article{evangelista2023ambiguity,
+  title={Ambiguity in solving imaging inverse problems with deep learning based operators},
+  author={Evangelista, Davide and Morotti, Elena and Piccolomini, Elena Loli and Nagy, James},
+  journal={arXiv preprint arXiv:2305.19774},
+  year={2023}
+}
+```
 
 ## Installation
 The use the code, simply clone the GitHub repository locally with
