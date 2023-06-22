@@ -1,4 +1,4 @@
-# UnderstandingStabilizers
+# Ambiguity-in-solving-Inverse-Problems
 GitHub repository to reproduce experiments from the paper: ...
 
 ## Installation
